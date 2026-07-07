@@ -118,4 +118,4 @@ Once installed, Kiro will activate the skill when Jenkins access is needed or wh
 
 Jenkins job paths follow the pattern: `<GitHub-Org>/<repo-name>/<branch>`
 
-For example: `EADV/eadv-program-architecture-tool/aat`
+For example: `MyOrg/my-repo/main`

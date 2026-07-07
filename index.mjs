@@ -106,7 +106,7 @@ server.tool(
   {
     jobPath: z
       .string()
-      .describe('Full job path, e.g. "EADV/eadv-program-architecture-tool/aat"'),
+      .describe('Full job path, e.g. "Org/repo-name/branch"'),
     buildNumber: z
       .number()
       .optional()
@@ -128,7 +128,7 @@ server.tool(
   {
     jobPath: z
       .string()
-      .describe('Full job path, e.g. "EADV/eadv-program-architecture-tool/aat"'),
+      .describe('Full job path, e.g. "Org/repo-name/branch"'),
     buildNumber: z
       .number()
       .optional()
@@ -155,7 +155,7 @@ server.tool(
   {
     jobPath: z
       .string()
-      .describe('Full job path, e.g. "EADV/eadv-program-architecture-tool/aat"'),
+      .describe('Full job path, e.g. "Org/repo-name/branch"'),
   },
   async ({ jobPath }) => {
     const encodedPath = encodeJobPath(jobPath);
@@ -172,7 +172,7 @@ server.tool(
   {
     jobPath: z
       .string()
-      .describe('Full job path, e.g. "EADV/eadv-program-architecture-tool/aat"'),
+      .describe('Full job path, e.g. "Org/repo-name/branch"'),
     limit: z.number().optional().describe('Number of builds to return (default 10)'),
   },
   async ({ jobPath, limit }) => {
@@ -195,7 +195,7 @@ server.tool(
   {
     jobPath: z
       .string()
-      .describe('Full job path, e.g. "EADV/eadv-program-architecture-tool/aat"'),
+      .describe('Full job path, e.g. "Org/repo-name/branch"'),
     buildNumber: z
       .number()
       .optional()
@@ -219,7 +219,7 @@ server.tool(
   {
     jobPath: z
       .string()
-      .describe('Full job path, e.g. "EADV/eadv-program-architecture-tool/aat"'),
+      .describe('Full job path, e.g. "Org/repo-name/branch"'),
     buildNumber: z
       .number()
       .optional()
@@ -246,7 +246,7 @@ server.tool(
   {
     jobPath: z
       .string()
-      .describe('Full job path, e.g. "EADV/eadv-program-architecture-tool/aat"'),
+      .describe('Full job path, e.g. "Org/repo-name/branch"'),
     buildNumber: z
       .number()
       .optional()
@@ -344,7 +344,7 @@ server.tool(
   {
     jobPath: z
       .string()
-      .describe('Full job path, e.g. "EADV/eadv-program-architecture-tool/sandbox"'),
+      .describe('Full job path, e.g. "Org/repo-name/branch"'),
     buildNumber: z
       .number()
       .optional()
@@ -379,7 +379,7 @@ server.tool(
   {
     jobPath: z
       .string()
-      .describe('Full job path, e.g. "EADV/eadv-program-architecture-tool/sandbox"'),
+      .describe('Full job path, e.g. "Org/repo-name/branch"'),
     buildNumber: z
       .number()
       .optional()
@@ -473,7 +473,7 @@ server.tool(
   {
     jobPath: z
       .string()
-      .describe('Full job path, e.g. "EADV/eadv-program-architecture-tool/aat"'),
+      .describe('Full job path, e.g. "Org/repo-name/branch"'),
     buildNumber: z
       .number()
       .optional()
@@ -523,7 +523,7 @@ server.tool(
   {
     jobPath: z
       .string()
-      .describe('Full job path, e.g. "EADV/eadv-program-architecture-tool/aat"'),
+      .describe('Full job path, e.g. "Org/repo-name/branch"'),
     buildA: z
       .number()
       .describe('First build number (typically the older/good build)'),
