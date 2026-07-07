@@ -1,0 +1,16 @@
+{
+  "name": "jenkins-mcp-server",
+  "version": "1.0.0",
+  "description": "MCP server for Jenkins behind Cloudflare Access",
+  "type": "module",
+  "main": "index.mjs",
+  "bin": {
+    "jenkins-mcp-server": "./index.mjs"
+  },
+  "scripts": {
+    "start": "node index.mjs"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.1"
+  }
+}
