@@ -105,13 +105,16 @@ Once authenticated, these Jenkins MCP tools are available:
 | Tool | Description |
 |------|-------------|
 | `get_build` | Get info about a specific build |
-| `get_build_log` | Get console output |
+| `get_build_log` | Get console output (supports pagination via startLine) |
 | `get_job` | Get job info + recent builds list |
 | `list_builds` | List recent builds with results |
-| `trigger_build` | Trigger a new build (with optional params) |
-| `get_test_results` | Get test report for a build |
-| `get_artifact` | Read a text artifact inline (e.g. junit.xml, error-context.md) |
-| `download_test_results` | Download playwright artifacts to local temp dir |
+| `get_test_results` | Get full test report for a build |
+| `get_failed_tests` | Get only failing/erroring test cases with error messages (much more concise than get_test_results) |
+| `compare_builds` | Compare test results between two builds to see which tests flipped (pass↔fail) |
+| `get_artifact` | Read a text artifact inline (e.g. junit.xml, error-context.md, .last-run.json) |
+| `download_test_results` | Download playwright test-results/report artifacts to local temp dir |
+| `list_stages` | List pipeline stages for a build with status and duration |
+| `get_stage_log` | Get console log for a specific pipeline stage (by name or ID) |
 
 ## Important Notes
 
