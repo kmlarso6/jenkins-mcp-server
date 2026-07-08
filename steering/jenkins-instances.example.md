@@ -15,9 +15,17 @@ Org prefix in job paths: `{Product}/`
 Known repos:
 - (add your repos here)
 
+### Legacy Pipelines (Main Instance)
+
+Some repos use a legacy shared pipeline with non-standard job paths (warapps-deployment) that don't follow the `Org/repo/branch` pattern. These are typically manually triggered and not multibranch.
+
+| GitHub Repo | Jenkins Job Path |
+|-------------|-----------------|
+| {repo-name} | `warapps-deployment/{job-name}` |
+
 ## PoP Instances
 
-### My PoP (`mcp_Jenkins_PoP_*`)
+### My PoP (`mcp_Jenkins_{Product}_*`)
 
 URL: `https://jenkins-{product}.devops.asu.edu`
 Org prefix in job paths: `ASU Github-{Product}/`
