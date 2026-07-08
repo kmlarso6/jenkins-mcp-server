@@ -14,7 +14,7 @@ keywords:
   - cloudflared
   - playwright results
   - test results
-  - aat build
+  - build results
 ---
 
 # Jenkins Access via Cloudflare
@@ -29,6 +29,7 @@ Cloudflare Access token to make API calls.
 - When the user asks to check Jenkins builds, logs, or test results
 - When any `mcp_Jenkins_*` tool call fails with authentication errors
 - When the user mentions needing to log into Jenkins
+- When the user needs to access a PoP Jenkins instance (different URL)
 
 ## Authentication Flow
 
@@ -98,6 +99,14 @@ Job paths follow the pattern `<GitHub-Org>/<repo-name>/<branch>`. Discover
 available jobs using the `get_job` tool with a folder path, or ask the user
 for their specific job path.
 
+## Finding Which Instance Has a Repo
+
+When the user asks about a Jenkins build without specifying the instance:
+1. Check the `jenkins-instances.md` steering file (activate with `#jenkins-instances.md` context) for a known mapping
+2. If the repo isn't mapped, try all configured Jenkins MCP servers in parallel by calling `get_job` on each with the appropriate org prefix
+3. Use whichever returns a result (the others will 404)
+4. Mention to the user which instance the repo was found on
+
 ## Available MCP Tools
 
 Once authenticated, these Jenkins MCP tools are available:
@@ -121,6 +130,16 @@ Once authenticated, these Jenkins MCP tools are available:
 - **Present the URL from terminal output** — `cloudflared` may auto-open a browser,
   but always present the URL from the terminal output so the user can open it
   in the browser of their choice (the auto-opened window can be ignored/closed).
+  Jenkins access is typically granted to exception ASURITEs, so users will likely
+  need to authenticate in an incognito window or a browser profile where they can
+  log in with their exception credentials.
 - **Session expiry** — If a Jenkins MCP call fails, try re-authenticating first.
 - **The MCP server handles token injection** — you don't need to manually pass
   tokens to Jenkins API calls. Just use the `mcp_Jenkins_*` tools directly.
+- **PoP instances** — PoP (Proof of Presence) Jenkins instances run at different
+  URLs (e.g. `jenkins-{product}.devops.asu.edu`). Each requires its own Cloudflare
+  login and is typically configured as a separate MCP server entry with its own
+  credentials. Run `cloudflared access login` for each PoP URL separately.
+- **Branches with slashes** — If a branch name contains slashes (e.g.
+  `feat/my-feature`), encode the slashes as `%2F` in the jobPath parameter:
+  `"MyOrg/my-repo/feat%2Fmy-feature"`

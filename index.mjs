@@ -26,25 +26,27 @@ if (!JENKINS_USER || !JENKINS_TOKEN) {
 
 // --- Cloudflare Access Token ---
 
-function getCfAccessToken() {
+function getCfAccessToken(appUrl) {
+  const targetUrl = appUrl || CLOUDFLARED_APP_URL;
   try {
     const token = execSync(
-      `cloudflared access token -app=${CLOUDFLARED_APP_URL}`,
+      `cloudflared access token -app=${targetUrl}`,
       { encoding: 'utf-8', timeout: 10000 },
     ).trim();
     return token;
   } catch (err) {
     throw new Error(
-      `Failed to get Cloudflare Access token. Run "cloudflared access login ${CLOUDFLARED_APP_URL}" first.\n${err.message}`,
+      `Failed to get Cloudflare Access token. Run "cloudflared access login ${targetUrl}" first.\n${err.message}`,
     );
   }
 }
 
 // --- Jenkins API Client ---
 
-async function jenkinsRequest(path, options = {}) {
-  const cfToken = getCfAccessToken();
-  const url = `${JENKINS_URL}${path}`;
+async function jenkinsRequest(path, options = {}, baseUrl) {
+  const effectiveUrl = baseUrl || JENKINS_URL;
+  const cfToken = getCfAccessToken(effectiveUrl);
+  const url = `${effectiveUrl}${path}`;
   const basicAuth = Buffer.from(`${JENKINS_USER}:${JENKINS_TOKEN}`).toString(
     'base64',
   );
@@ -69,25 +71,28 @@ async function jenkinsRequest(path, options = {}) {
   return response;
 }
 
-async function jenkinsJson(path, options = {}) {
-  const response = await jenkinsRequest(path, options);
+async function jenkinsJson(path, options = {}, baseUrl) {
+  const response = await jenkinsRequest(path, options, baseUrl);
   return response.json();
 }
 
-async function jenkinsText(path, options = {}) {
-  const response = await jenkinsRequest(path, options);
+async function jenkinsText(path, options = {}, baseUrl) {
+  const response = await jenkinsRequest(path, options, baseUrl);
   return response.text();
 }
 
-async function jenkinsBuffer(path, options = {}) {
-  const response = await jenkinsRequest(path, options);
+async function jenkinsBuffer(path, options = {}, baseUrl) {
+  const response = await jenkinsRequest(path, options, baseUrl);
   return Buffer.from(await response.arrayBuffer());
 }
 
 function encodeJobPath(jobPath) {
+  // Split on "/" then decode-then-reencode each segment.
+  // This correctly handles branch names containing slashes when the user
+  // pre-encodes them as %2F (e.g. "Org/repo/feat%2Fmy-branch").
   return jobPath
     .split('/')
-    .map((p) => `job/${encodeURIComponent(p)}`)
+    .map((p) => `job/${encodeURIComponent(decodeURIComponent(p))}`)
     .join('/');
 }
 
@@ -106,16 +111,20 @@ server.tool(
   {
     jobPath: z
       .string()
-      .describe('Full job path, e.g. "Org/repo-name/branch"'),
+      .describe('Full job path, e.g. "Org/repo-name/branch". For branches with slashes, encode them as %2F (e.g. "Org/repo/feat%2Fmy-branch").'),
     buildNumber: z
       .number()
       .optional()
       .describe('Build number (defaults to lastBuild)'),
+    baseUrl: z
+      .string()
+      .optional()
+      .describe('Override Jenkins base URL for PoP instances (e.g. "https://jenkins-{product}.devops.asu.edu")'),
   },
-  async ({ jobPath, buildNumber }) => {
+  async ({ jobPath, buildNumber, baseUrl }) => {
     const buildRef = buildNumber || 'lastBuild';
     const encodedPath = encodeJobPath(jobPath);
-    const data = await jenkinsJson(`/${encodedPath}/${buildRef}/api/json`);
+    const data = await jenkinsJson(`/${encodedPath}/${buildRef}/api/json`, {}, baseUrl);
     return {
       content: [{ type: 'text', text: JSON.stringify(data, null, 2) }],
     };
@@ -128,7 +137,7 @@ server.tool(
   {
     jobPath: z
       .string()
-      .describe('Full job path, e.g. "Org/repo-name/branch"'),
+      .describe('Full job path, e.g. "Org/repo-name/branch". For branches with slashes, encode them as %2F (e.g. "Org/repo/feat%2Fmy-branch").'),
     buildNumber: z
       .number()
       .optional()
@@ -137,13 +146,17 @@ server.tool(
       .number()
       .optional()
       .describe('Starting line offset (for pagination)'),
+    baseUrl: z
+      .string()
+      .optional()
+      .describe('Override Jenkins base URL for PoP instances (e.g. "https://jenkins-{product}.devops.asu.edu")'),
   },
-  async ({ jobPath, buildNumber, startLine }) => {
+  async ({ jobPath, buildNumber, startLine, baseUrl }) => {
     const buildRef = buildNumber || 'lastBuild';
     const encodedPath = encodeJobPath(jobPath);
     const start = startLine || 0;
     const text = await jenkinsText(
-      `/${encodedPath}/${buildRef}/logText/progressiveText?start=${start}`,
+      `/${encodedPath}/${buildRef}/logText/progressiveText?start=${start}`, {}, baseUrl,
     );
     return { content: [{ type: 'text', text }] };
   },
@@ -155,11 +168,15 @@ server.tool(
   {
     jobPath: z
       .string()
-      .describe('Full job path, e.g. "Org/repo-name/branch"'),
+      .describe('Full job path, e.g. "Org/repo-name/branch". For branches with slashes, encode them as %2F (e.g. "Org/repo/feat%2Fmy-branch").'),
+    baseUrl: z
+      .string()
+      .optional()
+      .describe('Override Jenkins base URL for PoP instances (e.g. "https://jenkins-{product}.devops.asu.edu")'),
   },
-  async ({ jobPath }) => {
+  async ({ jobPath, baseUrl }) => {
     const encodedPath = encodeJobPath(jobPath);
-    const data = await jenkinsJson(`/${encodedPath}/api/json`);
+    const data = await jenkinsJson(`/${encodedPath}/api/json`, {}, baseUrl);
     return {
       content: [{ type: 'text', text: JSON.stringify(data, null, 2) }],
     };
@@ -172,14 +189,18 @@ server.tool(
   {
     jobPath: z
       .string()
-      .describe('Full job path, e.g. "Org/repo-name/branch"'),
+      .describe('Full job path, e.g. "Org/repo-name/branch". For branches with slashes, encode them as %2F (e.g. "Org/repo/feat%2Fmy-branch").'),
     limit: z.number().optional().describe('Number of builds to return (default 10)'),
+    baseUrl: z
+      .string()
+      .optional()
+      .describe('Override Jenkins base URL for PoP instances (e.g. "https://jenkins-{product}.devops.asu.edu")'),
   },
-  async ({ jobPath, limit }) => {
+  async ({ jobPath, limit, baseUrl }) => {
     const max = limit || 10;
     const encodedPath = encodeJobPath(jobPath);
     const data = await jenkinsJson(
-      `/${encodedPath}/api/json?tree=builds[number,result,timestamp,duration,displayName,url]{0,${max}}`,
+      `/${encodedPath}/api/json?tree=builds[number,result,timestamp,duration,displayName,url]{0,${max}}`, {}, baseUrl,
     );
     return {
       content: [
@@ -195,17 +216,21 @@ server.tool(
   {
     jobPath: z
       .string()
-      .describe('Full job path, e.g. "Org/repo-name/branch"'),
+      .describe('Full job path, e.g. "Org/repo-name/branch". For branches with slashes, encode them as %2F (e.g. "Org/repo/feat%2Fmy-branch").'),
     buildNumber: z
       .number()
       .optional()
       .describe('Build number (defaults to lastBuild)'),
+    baseUrl: z
+      .string()
+      .optional()
+      .describe('Override Jenkins base URL for PoP instances (e.g. "https://jenkins-{product}.devops.asu.edu")'),
   },
-  async ({ jobPath, buildNumber }) => {
+  async ({ jobPath, buildNumber, baseUrl }) => {
     const buildRef = buildNumber || 'lastBuild';
     const encodedPath = encodeJobPath(jobPath);
     const data = await jenkinsJson(
-      `/${encodedPath}/${buildRef}/testReport/api/json`,
+      `/${encodedPath}/${buildRef}/testReport/api/json`, {}, baseUrl,
     );
     return {
       content: [{ type: 'text', text: JSON.stringify(data, null, 2) }],
@@ -219,7 +244,7 @@ server.tool(
   {
     jobPath: z
       .string()
-      .describe('Full job path, e.g. "Org/repo-name/branch"'),
+      .describe('Full job path, e.g. "Org/repo-name/branch". For branches with slashes, encode them as %2F (e.g. "Org/repo/feat%2Fmy-branch").'),
     buildNumber: z
       .number()
       .optional()
@@ -229,12 +254,16 @@ server.tool(
       .describe(
         'Relative path to the artifact, e.g. "playwright/test-results/junit.xml"',
       ),
+    baseUrl: z
+      .string()
+      .optional()
+      .describe('Override Jenkins base URL for PoP instances (e.g. "https://jenkins-{product}.devops.asu.edu")'),
   },
-  async ({ jobPath, buildNumber, artifactPath }) => {
+  async ({ jobPath, buildNumber, artifactPath, baseUrl }) => {
     const buildRef = buildNumber || 'lastBuild';
     const encodedPath = encodeJobPath(jobPath);
     const text = await jenkinsText(
-      `/${encodedPath}/${buildRef}/artifact/${artifactPath}`,
+      `/${encodedPath}/${buildRef}/artifact/${artifactPath}`, {}, baseUrl,
     );
     return { content: [{ type: 'text', text }] };
   },
@@ -246,7 +275,7 @@ server.tool(
   {
     jobPath: z
       .string()
-      .describe('Full job path, e.g. "Org/repo-name/branch"'),
+      .describe('Full job path, e.g. "Org/repo-name/branch". For branches with slashes, encode them as %2F (e.g. "Org/repo/feat%2Fmy-branch").'),
     buildNumber: z
       .number()
       .optional()
@@ -261,15 +290,19 @@ server.tool(
       .describe(
         'If true, keeps previous download in a numbered subdirectory for comparison',
       ),
+    baseUrl: z
+      .string()
+      .optional()
+      .describe('Override Jenkins base URL for PoP instances (e.g. "https://jenkins-{product}.devops.asu.edu")'),
   },
-  async ({ jobPath, buildNumber, include, keepPrevious }) => {
+  async ({ jobPath, buildNumber, include, keepPrevious, baseUrl }) => {
     const buildRef = buildNumber || 'lastBuild';
     const encodedPath = encodeJobPath(jobPath);
     const filter = include || 'all';
 
     // Get artifact list from the build
     const buildData = await jenkinsJson(
-      `/${encodedPath}/${buildRef}/api/json?tree=artifacts[relativePath,fileName],number`,
+      `/${encodedPath}/${buildRef}/api/json?tree=artifacts[relativePath,fileName],number`, {}, baseUrl,
     );
     const actualBuildNumber = buildData.number;
     const artifacts = buildData.artifacts || [];
@@ -314,7 +347,7 @@ server.tool(
 
       try {
         const content = await jenkinsText(
-          `/${encodedPath}/${actualBuildNumber}/artifact/${artifact.relativePath}`,
+          `/${encodedPath}/${actualBuildNumber}/artifact/${artifact.relativePath}`, {}, baseUrl,
         );
         const outPath = join(buildDir, artifact.relativePath);
         mkdirSync(join(outPath, '..'), { recursive: true });
@@ -344,19 +377,23 @@ server.tool(
   {
     jobPath: z
       .string()
-      .describe('Full job path, e.g. "Org/repo-name/branch"'),
+      .describe('Full job path, e.g. "Org/repo-name/branch". For branches with slashes, encode them as %2F (e.g. "Org/repo/feat%2Fmy-branch").'),
     buildNumber: z
       .number()
       .optional()
       .describe('Build number (defaults to lastBuild)'),
+    baseUrl: z
+      .string()
+      .optional()
+      .describe('Override Jenkins base URL for PoP instances (e.g. "https://jenkins-{product}.devops.asu.edu")'),
   },
-  async ({ jobPath, buildNumber }) => {
+  async ({ jobPath, buildNumber, baseUrl }) => {
     const buildRef = buildNumber || 'lastBuild';
     const encodedPath = encodeJobPath(jobPath);
 
     // Use the Workflow API to get stage info
     const data = await jenkinsJson(
-      `/${encodedPath}/${buildRef}/wfapi/describe`,
+      `/${encodedPath}/${buildRef}/wfapi/describe`, {}, baseUrl,
     );
 
     const stages = (data.stages || []).map((stage) => ({
@@ -379,7 +416,7 @@ server.tool(
   {
     jobPath: z
       .string()
-      .describe('Full job path, e.g. "Org/repo-name/branch"'),
+      .describe('Full job path, e.g. "Org/repo-name/branch". For branches with slashes, encode them as %2F (e.g. "Org/repo/feat%2Fmy-branch").'),
     buildNumber: z
       .number()
       .optional()
@@ -392,14 +429,18 @@ server.tool(
       .string()
       .optional()
       .describe('Stage ID (numeric, from list_stages). Use this OR stageName.'),
+    baseUrl: z
+      .string()
+      .optional()
+      .describe('Override Jenkins base URL for PoP instances (e.g. "https://jenkins-{product}.devops.asu.edu")'),
   },
-  async ({ jobPath, buildNumber, stageName, stageId }) => {
+  async ({ jobPath, buildNumber, stageName, stageId, baseUrl }) => {
     const buildRef = buildNumber || 'lastBuild';
     const encodedPath = encodeJobPath(jobPath);
 
     // First get the stage list to find the right node
     const data = await jenkinsJson(
-      `/${encodedPath}/${buildRef}/wfapi/describe`,
+      `/${encodedPath}/${buildRef}/wfapi/describe`, {}, baseUrl,
     );
 
     let targetStage;
@@ -427,7 +468,7 @@ server.tool(
 
     // Get the execution nodes for this stage
     const stageDetail = await jenkinsJson(
-      `/${encodedPath}/${buildRef}/execution/node/${targetStage.id}/wfapi/describe`,
+      `/${encodedPath}/${buildRef}/execution/node/${targetStage.id}/wfapi/describe`, {}, baseUrl,
     );
 
     // Collect log text from all flow nodes in this stage
@@ -437,7 +478,7 @@ server.tool(
     for (const nodeId of nodeIds) {
       try {
         const nodeLog = await jenkinsJson(
-          `/${encodedPath}/${buildRef}/execution/node/${nodeId}/wfapi/log`,
+          `/${encodedPath}/${buildRef}/execution/node/${nodeId}/wfapi/log`, {}, baseUrl,
         );
         if (nodeLog.text) {
           logParts.push(nodeLog.text);
@@ -473,17 +514,21 @@ server.tool(
   {
     jobPath: z
       .string()
-      .describe('Full job path, e.g. "Org/repo-name/branch"'),
+      .describe('Full job path, e.g. "Org/repo-name/branch". For branches with slashes, encode them as %2F (e.g. "Org/repo/feat%2Fmy-branch").'),
     buildNumber: z
       .number()
       .optional()
       .describe('Build number (defaults to lastBuild)'),
+    baseUrl: z
+      .string()
+      .optional()
+      .describe('Override Jenkins base URL for PoP instances (e.g. "https://jenkins-{product}.devops.asu.edu")'),
   },
-  async ({ jobPath, buildNumber }) => {
+  async ({ jobPath, buildNumber, baseUrl }) => {
     const buildRef = buildNumber || 'lastBuild';
     const encodedPath = encodeJobPath(jobPath);
     const data = await jenkinsJson(
-      `/${encodedPath}/${buildRef}/testReport/api/json`,
+      `/${encodedPath}/${buildRef}/testReport/api/json`, {}, baseUrl,
     );
 
     const failed = [];
@@ -523,20 +568,24 @@ server.tool(
   {
     jobPath: z
       .string()
-      .describe('Full job path, e.g. "Org/repo-name/branch"'),
+      .describe('Full job path, e.g. "Org/repo-name/branch". For branches with slashes, encode them as %2F (e.g. "Org/repo/feat%2Fmy-branch").'),
     buildA: z
       .number()
       .describe('First build number (typically the older/good build)'),
     buildB: z
       .number()
       .describe('Second build number (typically the newer/bad build)'),
+    baseUrl: z
+      .string()
+      .optional()
+      .describe('Override Jenkins base URL for PoP instances (e.g. "https://jenkins-{product}.devops.asu.edu")'),
   },
-  async ({ jobPath, buildA, buildB }) => {
+  async ({ jobPath, buildA, buildB, baseUrl }) => {
     const encodedPath = encodeJobPath(jobPath);
 
     const [dataA, dataB] = await Promise.all([
-      jenkinsJson(`/${encodedPath}/${buildA}/testReport/api/json`),
-      jenkinsJson(`/${encodedPath}/${buildB}/testReport/api/json`),
+      jenkinsJson(`/${encodedPath}/${buildA}/testReport/api/json`, {}, baseUrl),
+      jenkinsJson(`/${encodedPath}/${buildB}/testReport/api/json`, {}, baseUrl),
     ]);
 
     function buildTestMap(data) {
